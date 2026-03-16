@@ -1,0 +1,36 @@
+server:
+  listen: 127.0.0.1:8080
+  read_timeout: 10s
+  write_timeout: 30s
+  shutdown_timeout: 10s
+  fetch_timeout: 20s
+  max_response_bytes: 8388608
+
+subscriptions:
+  - name: default-subscription
+    secret: "123e4567-e89b-42d3-a456-426614174000"
+    default_platform: V2rayN
+    platform_options:
+      happ:
+        routing: "happ://routing/onadd/REPLACE_WITH_YOUR_ROUTING_PAYLOAD"
+    sources:
+      - name: manual-nodes
+        type: manual
+        prefix: "[Manual] "
+        entries:
+          - "vmess://REPLACE_WITH_YOUR_NODE"
+          - "vless://REPLACE_WITH_YOUR_NODE"
+          - "ss://REPLACE_WITH_YOUR_NODE"
+
+      - name: upstream-base64-lines
+        type: remote
+        prefix: "[JP] "
+        remote_type: base64_lines
+        url: "https://example.com/api/v1/client/subscribe?token=REPLACE_ME"
+        refresh_interval: 30m
+        timeout: 15s
+        include_patterns: []
+        exclude_patterns:
+          - "剩余流量"
+          - "套餐到期"
+          - "过滤掉"
