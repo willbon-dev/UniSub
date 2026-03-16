@@ -2,18 +2,19 @@
 set -euo pipefail
 
 REPO="${REPO:-willbon-dev/UniSub}"
-VERSION="latest"
+RELEASE_VERSION="latest"
 INSTALL_ROOT="/opt/unisub"
 CONFIG_ROOT="/etc/unisub"
 STATE_ROOT="/var/lib/unisub"
 SERVICE_NAME="unisub"
 BIN_NAME="unisub"
 SERVICE_FILE="/etc/systemd/system/${SERVICE_NAME}.service"
+TMP_DIR=""
 
 while [[ $# -gt 0 ]]; do
   case "$1" in
     --version)
-      VERSION="${2:?missing value for --version}"
+      RELEASE_VERSION="${2:?missing value for --version}"
       shift 2
       ;;
     *)
@@ -25,6 +26,12 @@ done
 
 log() {
   echo "[unisub-install] $*"
+}
+
+cleanup() {
+  if [[ -n "${TMP_DIR}" && -d "${TMP_DIR}" ]]; then
+    rm -rf "${TMP_DIR}"
+  fi
 }
 
 require_root() {
@@ -60,6 +67,7 @@ detect_arch() {
 
 fetch() {
   local url="$1"
+  log "fetching metadata from ${url}"
   if command -v curl >/dev/null 2>&1; then
     curl -fsSL "$url"
   elif command -v wget >/dev/null 2>&1; then
@@ -73,6 +81,7 @@ fetch() {
 download_to() {
   local url="$1"
   local output="$2"
+  log "downloading ${url} -> ${output}"
   if command -v curl >/dev/null 2>&1; then
     curl -fsSL "$url" -o "$output"
   elif command -v wget >/dev/null 2>&1; then
@@ -83,20 +92,13 @@ download_to() {
   fi
 }
 
-release_api_url() {
-  if [[ "${VERSION}" == "latest" ]]; then
-    echo "https://api.github.com/repos/${REPO}/releases/latest"
+release_download_url() {
+  local asset_name="$1"
+  if [[ "${RELEASE_VERSION}" == "latest" ]]; then
+    echo "https://github.com/${REPO}/releases/latest/download/${asset_name}"
   else
-    echo "https://api.github.com/repos/${REPO}/releases/tags/${VERSION}"
+    echo "https://github.com/${REPO}/releases/download/${RELEASE_VERSION}/${asset_name}"
   fi
-}
-
-find_asset_url() {
-  local api_url="$1"
-  local asset_name="$2"
-  local json
-  json="$(fetch "$api_url")"
-  printf '%s\n' "$json" | tr ',' '\n' | sed -n 's/.*"browser_download_url"[[:space:]]*:[[:space:]]*"\([^"]*\)".*/\1/p' | grep "/${asset_name}\$" | head -n1
 }
 
 write_service_file() {
@@ -126,36 +128,29 @@ EOF
 }
 
 main() {
+  trap cleanup EXIT
   require_root
   check_os
   detect_arch
 
   local asset_name="unisub_linux_${GOARCH}.tar.gz"
-  local api_url
-  api_url="$(release_api_url)"
   log "resolving release asset ${asset_name}"
-
   local download_url
-  download_url="$(find_asset_url "$api_url" "$asset_name")"
-  if [[ -z "${download_url}" ]]; then
-    echo "failed to find release asset ${asset_name}" >&2
-    exit 1
-  fi
+  download_url="$(release_download_url "${asset_name}")"
+  log "resolved release download URL: ${download_url}"
 
-  local tmp_dir
-  tmp_dir="$(mktemp -d)"
-  trap 'rm -rf "${tmp_dir}"' EXIT
+  TMP_DIR="$(mktemp -d)"
 
   log "downloading ${download_url}"
-  download_to "$download_url" "${tmp_dir}/${asset_name}"
-  tar -xzf "${tmp_dir}/${asset_name}" -C "${tmp_dir}"
+  download_to "$download_url" "${TMP_DIR}/${asset_name}"
+  tar -xzf "${TMP_DIR}/${asset_name}" -C "${TMP_DIR}"
 
   if ! id -u "${SERVICE_NAME}" >/dev/null 2>&1; then
     useradd --system --home "${STATE_ROOT}" --shell /usr/sbin/nologin "${SERVICE_NAME}"
   fi
 
   mkdir -p "${INSTALL_ROOT}/bin" "${CONFIG_ROOT}" "${STATE_ROOT}"
-  install -m 0755 "${tmp_dir}/${BIN_NAME}" "${INSTALL_ROOT}/bin/${BIN_NAME}"
+  install -m 0755 "${TMP_DIR}/${BIN_NAME}" "${INSTALL_ROOT}/bin/${BIN_NAME}"
 
   if [[ ! -f "${CONFIG_ROOT}/config.yaml" ]]; then
     log "installing example config to ${CONFIG_ROOT}/config.yaml"
