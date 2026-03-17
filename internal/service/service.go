@@ -115,8 +115,8 @@ func (s *Service) RenderSubscription(ctx context.Context, secret, platform strin
 	}
 
 	if platform == config.PlatformHapp {
-		if routing := strings.TrimSpace(sub.cfg.PlatformOptions.Happ.Routing); routing != "" {
-			lines = append([]string{routing}, lines...)
+		if happLines := sub.cfg.PlatformOptions.Happ.RenderSubscriptionLines(); len(happLines) > 0 {
+			lines = append(happLines, lines...)
 		}
 	}
 

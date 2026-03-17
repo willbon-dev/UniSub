@@ -42,7 +42,12 @@ func TestRenderSubscriptionHappAndRefresh(t *testing.T) {
 				Secret:          "123e4567-e89b-42d3-a456-426614174000",
 				DefaultPlatform: config.PlatformHapp,
 				PlatformOptions: config.PlatformOptions{
-					Happ: config.HappOptions{Routing: "happ://routing/onadd/abc"},
+					Happ: config.HappOptions{
+						Routing:               "happ://routing/onadd/abc",
+						ProfileUpdateInterval: intPtr(1),
+						ProfileTitle:          strPtr("UniSub"),
+						PingType:              strPtr("proxy"),
+					},
 				},
 				Sources: []config.SourceConfig{
 					{
@@ -69,13 +74,22 @@ func TestRenderSubscriptionHappAndRefresh(t *testing.T) {
 	if err != nil {
 		t.Fatalf("RenderSubscription() error = %v", err)
 	}
-	if len(result.Lines) != 2 {
-		t.Fatalf("len(result.Lines) = %d, want 2", len(result.Lines))
+	if len(result.Lines) != 5 {
+		t.Fatalf("len(result.Lines) = %d, want 5", len(result.Lines))
 	}
 	if result.Lines[0] != "happ://routing/onadd/abc" {
 		t.Fatalf("routing line = %q", result.Lines[0])
 	}
-	if got := nodeparser.ParseNode(result.Lines[1]).DisplayName; got != "[Remote] 香港-1" {
+	if result.Lines[1] != "#profile-update-interval: 1" {
+		t.Fatalf("profile-update-interval line = %q", result.Lines[1])
+	}
+	if result.Lines[2] != "#profile-title: UniSub" {
+		t.Fatalf("profile-title line = %q", result.Lines[2])
+	}
+	if result.Lines[3] != "#ping-type proxy" {
+		t.Fatalf("ping-type line = %q", result.Lines[3])
+	}
+	if got := nodeparser.ParseNode(result.Lines[4]).DisplayName; got != "[Remote] 香港-1" {
 		t.Fatalf("prefixed name = %q", got)
 	}
 	if got := hits.Load(); got != 1 {
@@ -136,4 +150,12 @@ type roundTripFunc func(*http.Request) (*http.Response, error)
 
 func (fn roundTripFunc) RoundTrip(req *http.Request) (*http.Response, error) {
 	return fn(req)
+}
+
+func strPtr(v string) *string {
+	return &v
+}
+
+func intPtr(v int) *int {
+	return &v
 }

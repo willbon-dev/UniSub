@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"os"
 	"regexp"
+	"strconv"
 	"strings"
 	"time"
 
@@ -49,6 +50,68 @@ type PlatformOptions struct {
 
 type HappOptions struct {
 	Routing string `yaml:"routing"`
+
+	ProfileUpdateInterval            *int    `yaml:"profile_update_interval"`
+	ProfileTitle                     *string `yaml:"profile_title"`
+	SubscriptionUserinfo             *string `yaml:"subscription_userinfo"`
+	SupportURL                       *string `yaml:"support_url"`
+	ProfileWebPageURL                *string `yaml:"profile_web_page_url"`
+	Announce                         *string `yaml:"announce"`
+	RoutingEnable                    *bool   `yaml:"routing_enable"`
+	CustomTunnelConfig               *string `yaml:"custom_tunnel_config"`
+	ProviderID                       *string `yaml:"provider_id"`
+	NewURL                           *string `yaml:"new_url"`
+	NewDomain                        *string `yaml:"new_domain"`
+	FallbackURL                      *string `yaml:"fallback_url"`
+	NoLimitEnabled                   *bool   `yaml:"no_limit_enabled"`
+	NoLimitXHTTPEnabled              *bool   `yaml:"no_limit_xhttp_enabled"`
+	SubscriptionAlwaysHWIDEnable     *bool   `yaml:"subscription_always_hwid_enable"`
+	NotificationSubsExpire           *bool   `yaml:"notification_subs_expire"`
+	HideSettings                     *bool   `yaml:"hide_settings"`
+	ServerAddressResolveEnable       *bool   `yaml:"server_address_resolve_enable"`
+	ServerAddressResolveDNSDomain    *string `yaml:"server_address_resolve_dns_domain"`
+	ServerAddressResolveDNSIP        *string `yaml:"server_address_resolve_dns_ip"`
+	SubscriptionAutoconnect          *bool   `yaml:"subscription_autoconnect"`
+	SubscriptionAutoconnectType      *string `yaml:"subscription_autoconnect_type"`
+	SubscriptionPingOnOpenEnabled    *bool   `yaml:"subscription_ping_onopen_enabled"`
+	SubscriptionAutoUpdateEnable     *bool   `yaml:"subscription_auto_update_enable"`
+	FragmentationEnable              *bool   `yaml:"fragmentation_enable"`
+	FragmentationPackets             *string `yaml:"fragmentation_packets"`
+	FragmentationLength              *string `yaml:"fragmentation_length"`
+	FragmentationInterval            *string `yaml:"fragmentation_interval"`
+	FragmentationMaxSplit            *string `yaml:"fragmentation_maxsplit"`
+	NoisesEnable                     *bool   `yaml:"noises_enable"`
+	NoisesType                       *string `yaml:"noises_type"`
+	NoisesPacket                     *string `yaml:"noises_packet"`
+	NoisesDelay                      *string `yaml:"noises_delay"`
+	NoisesApplyTo                    *string `yaml:"noises_applyto"`
+	PingType                         *string `yaml:"ping_type"`
+	CheckURLViaProxy                 *string `yaml:"check_url_via_proxy"`
+	ChangeUserAgent                  *string `yaml:"change_user_agent"`
+	AppAutoStart                     *bool   `yaml:"app_auto_start"`
+	SubscriptionAutoUpdateOpenEnable *bool   `yaml:"subscription_auto_update_open_enable"`
+	PerAppProxyMode                  *string `yaml:"per_app_proxy_mode"`
+	PerAppProxyList                  *string `yaml:"per_app_proxy_list"`
+	SniffingEnable                   *bool   `yaml:"sniffing_enable"`
+	SubscriptionsCollapse            *bool   `yaml:"subscriptions_collapse"`
+	SubscriptionsExpandNow           *bool   `yaml:"subscriptions_expand_now"`
+	PingResult                       *string `yaml:"ping_result"`
+	MuxEnable                        *bool   `yaml:"mux_enable"`
+	MuxTCPConnections                *string `yaml:"mux_tcp_connections"`
+	MuxXUDPConnections               *string `yaml:"mux_xudp_connections"`
+	MuxQUIC                          *string `yaml:"mux_quic"`
+	ProxyEnable                      *bool   `yaml:"proxy_enable"`
+	TunEnable                        *bool   `yaml:"tun_enable"`
+	TunMode                          *string `yaml:"tun_mode"`
+	TunType                          *string `yaml:"tun_type"`
+	ExcludeRoutes                    *string `yaml:"exclude_routes"`
+	ColorProfile                     *string `yaml:"color_profile"`
+	SubInfoColor                     *string `yaml:"sub_info_color"`
+	SubInfoText                      *string `yaml:"sub_info_text"`
+	SubInfoButtonText                *string `yaml:"sub_info_button_text"`
+	SubInfoButtonLink                *string `yaml:"sub_info_button_link"`
+	SubExpire                        *bool   `yaml:"sub_expire"`
+	SubExpireButtonLink              *string `yaml:"sub_expire_button_link"`
 }
 
 type SourceConfig struct {
@@ -200,3 +263,203 @@ func isSupportedRemoteType(name string) bool {
 }
 
 var uuidPattern = regexp.MustCompile(`(?i)^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$`)
+
+func (o HappOptions) RenderSubscriptionLines() []string {
+	lines := make([]string, 0, 1)
+	seen := make(map[string]struct{}, 1)
+
+	appendUnique := func(line string) {
+		line = strings.TrimSpace(line)
+		if line == "" {
+			return
+		}
+		if _, ok := seen[line]; ok {
+			return
+		}
+		seen[line] = struct{}{}
+		lines = append(lines, line)
+	}
+
+	appendUnique(o.Routing)
+
+	appendComment := func(key, value, separator string) {
+		key = strings.TrimSpace(key)
+		value = strings.TrimSpace(value)
+		if key == "" || value == "" {
+			return
+		}
+		if separator == "" {
+			separator = ": "
+		}
+		appendUnique("#" + key + separator + value)
+	}
+	appendCommentAllowEmpty := func(key string, value *string, separator string) {
+		if value == nil {
+			return
+		}
+		key = strings.TrimSpace(key)
+		if key == "" {
+			return
+		}
+		if separator == "" {
+			separator = ": "
+		}
+		appendUnique("#" + key + separator + strings.TrimSpace(*value))
+	}
+	appendBool := func(key string, value *bool) {
+		if value == nil {
+			return
+		}
+		if *value {
+			appendComment(key, "1", ": ")
+			return
+		}
+		appendComment(key, "0", ": ")
+	}
+	appendInt := func(key string, value *int) {
+		if value == nil {
+			return
+		}
+		appendComment(key, strconv.Itoa(*value), ": ")
+	}
+
+	appendInt("profile-update-interval", o.ProfileUpdateInterval)
+	if o.ProfileTitle != nil {
+		appendComment("profile-title", *o.ProfileTitle, ": ")
+	}
+	if o.SubscriptionUserinfo != nil {
+		appendComment("subscription-userinfo", *o.SubscriptionUserinfo, ": ")
+	}
+	if o.SupportURL != nil {
+		appendComment("support-url", *o.SupportURL, ": ")
+	}
+	if o.ProfileWebPageURL != nil {
+		appendComment("profile-web-page-url", *o.ProfileWebPageURL, ": ")
+	}
+	if o.Announce != nil {
+		appendComment("announce", *o.Announce, ": ")
+	}
+	appendBool("routing-enable", o.RoutingEnable)
+	if o.CustomTunnelConfig != nil {
+		appendComment("custom-tunnel-config", *o.CustomTunnelConfig, ": ")
+	}
+	if o.ProviderID != nil {
+		appendComment("providerid", *o.ProviderID, " ")
+	}
+	if o.NewURL != nil {
+		appendComment("new-url", *o.NewURL, " ")
+	}
+	if o.NewDomain != nil {
+		appendComment("new-domain", *o.NewDomain, " ")
+	}
+	if o.FallbackURL != nil {
+		appendComment("fallback-url", *o.FallbackURL, " ")
+	}
+	appendBool("no-limit-enabled", o.NoLimitEnabled)
+	appendBool("no-limit-xhttp-enabled", o.NoLimitXHTTPEnabled)
+	appendBool("subscription-always-hwid-enable", o.SubscriptionAlwaysHWIDEnable)
+	appendBool("notification-subs-expire", o.NotificationSubsExpire)
+	appendBool("hide-settings", o.HideSettings)
+	appendBool("server-address-resolve-enable", o.ServerAddressResolveEnable)
+	if o.ServerAddressResolveDNSDomain != nil {
+		appendComment("server-address-resolve-dns-domain", *o.ServerAddressResolveDNSDomain, ": ")
+	}
+	if o.ServerAddressResolveDNSIP != nil {
+		appendComment("server-address-resolve-dns-ip", *o.ServerAddressResolveDNSIP, ": ")
+	}
+	appendBool("subscription-autoconnect", o.SubscriptionAutoconnect)
+	if o.SubscriptionAutoconnectType != nil {
+		appendComment("subscription-autoconnect-type", *o.SubscriptionAutoconnectType, ": ")
+	}
+	appendBool("subscription-ping-onopen-enabled", o.SubscriptionPingOnOpenEnabled)
+	appendBool("subscription-auto-update-enable", o.SubscriptionAutoUpdateEnable)
+	appendBool("fragmentation-enable", o.FragmentationEnable)
+	if o.FragmentationPackets != nil {
+		appendComment("fragmentation-packets", *o.FragmentationPackets, ": ")
+	}
+	if o.FragmentationLength != nil {
+		appendComment("fragmentation-length", *o.FragmentationLength, ": ")
+	}
+	if o.FragmentationInterval != nil {
+		appendComment("fragmentation-interval", *o.FragmentationInterval, ": ")
+	}
+	if o.FragmentationMaxSplit != nil {
+		appendComment("fragmentation-maxsplit", *o.FragmentationMaxSplit, ": ")
+	}
+	appendBool("noises-enable", o.NoisesEnable)
+	if o.NoisesType != nil {
+		appendComment("noises-type", *o.NoisesType, ": ")
+	}
+	if o.NoisesPacket != nil {
+		appendComment("noises-packet", *o.NoisesPacket, ": ")
+	}
+	if o.NoisesDelay != nil {
+		appendComment("noises-delay", *o.NoisesDelay, ": ")
+	}
+	if o.NoisesApplyTo != nil {
+		appendComment("noises-applyto", *o.NoisesApplyTo, ": ")
+	}
+	if o.PingType != nil {
+		appendComment("ping-type", *o.PingType, " ")
+	}
+	if o.CheckURLViaProxy != nil {
+		appendComment("check-url-via-proxy", *o.CheckURLViaProxy, ": ")
+	}
+	if o.ChangeUserAgent != nil {
+		appendComment("change-user-agent", *o.ChangeUserAgent, ": ")
+	}
+	appendBool("app-auto-start", o.AppAutoStart)
+	appendBool("subscription-auto-update-open-enable", o.SubscriptionAutoUpdateOpenEnable)
+	if o.PerAppProxyMode != nil {
+		appendComment("per-app-proxy-mode", *o.PerAppProxyMode, ": ")
+	}
+	if o.PerAppProxyList != nil {
+		appendComment("per-app-proxy-list", *o.PerAppProxyList, ": ")
+	}
+	appendBool("sniffing-enable", o.SniffingEnable)
+	appendBool("subscriptions-collapse", o.SubscriptionsCollapse)
+	appendBool("subscriptions-expand-now", o.SubscriptionsExpandNow)
+	if o.PingResult != nil {
+		appendComment("ping-result", *o.PingResult, ": ")
+	}
+	appendBool("mux-enable", o.MuxEnable)
+	if o.MuxTCPConnections != nil {
+		appendComment("mux-tcp-connections", *o.MuxTCPConnections, ": ")
+	}
+	if o.MuxXUDPConnections != nil {
+		appendComment("mux-xudp-connections", *o.MuxXUDPConnections, ": ")
+	}
+	if o.MuxQUIC != nil {
+		appendComment("mux-quic", *o.MuxQUIC, ": ")
+	}
+	appendBool("proxy-enable", o.ProxyEnable)
+	appendBool("tun-enable", o.TunEnable)
+	if o.TunMode != nil {
+		appendComment("tun-mode", *o.TunMode, ": ")
+	}
+	if o.TunType != nil {
+		appendComment("tun-type", *o.TunType, ": ")
+	}
+	if o.ExcludeRoutes != nil {
+		appendComment("exclude-routes", *o.ExcludeRoutes, ": ")
+	}
+	if o.ColorProfile != nil {
+		appendComment("color-profile", *o.ColorProfile, ": ")
+	}
+	if o.SubInfoColor != nil {
+		appendComment("sub-info-color", *o.SubInfoColor, ": ")
+	}
+	appendCommentAllowEmpty("sub-info-text", o.SubInfoText, ": ")
+	if o.SubInfoButtonText != nil {
+		appendComment("sub-info-button-text", *o.SubInfoButtonText, ": ")
+	}
+	if o.SubInfoButtonLink != nil {
+		appendComment("sub-info-button-link", *o.SubInfoButtonLink, ": ")
+	}
+	appendBool("sub-expire", o.SubExpire)
+	if o.SubExpireButtonLink != nil {
+		appendComment("sub-expire-button-link", *o.SubExpireButtonLink, ": ")
+	}
+
+	return lines
+}

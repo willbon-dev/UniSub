@@ -45,17 +45,14 @@ curl 'http://127.0.0.1:8080/subscribe?secret=123e4567-e89b-42d3-a456-42661417400
 
 ## 配置
 
-完整模板见 [docs/config.example.yaml](docs/config.example.yaml)。
+完整模板见 [docs/config.example.yaml](docs/config.example.yaml)，详细配置说明见 [docs/config.md](docs/config.md)。
 
-关键字段：
+配置文档中已按字段逐项说明：
 
-- `subscriptions[].secret`: 访问统一订阅时使用的 UUID
-- `subscriptions[].default_platform`: 默认返回平台，可为 `V2rayN` 或 `Happ`
-- `subscriptions[].platform_options.happ.routing`: Happ 平台首行附加 routing
-- `sources[].type`: `manual` 或 `remote`
-- `sources[].prefix`: 为该 source 下所有节点名称追加统一前缀；为空时不处理
-- `sources[].remote_type`: 远程订阅格式，当前仅支持 `base64_lines`
-- `sources[].include_patterns` / `exclude_patterns`: 基于节点名称的 Go regexp 过滤
+- `server` 服务监听与超时配置
+- `subscriptions` 统一订阅入口配置
+- `sources` 手动节点与远程订阅源配置
+- `platform_options.happ` 的每个已支持字段、作用、输出方式和官方文档链接
 
 ## 安装与运行
 

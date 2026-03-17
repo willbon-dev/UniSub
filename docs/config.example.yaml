@@ -12,7 +12,33 @@ subscriptions:
     default_platform: V2rayN
     platform_options:
       happ:
+        # 首行 routing（Happ 要求）
         routing: "happ://routing/onadd/REPLACE_WITH_YOUR_ROUTING_PAYLOAD"
+        # 以下每个字段都会生成订阅注释行，例如：
+        # profile_update_interval: 1 => #profile-update-interval: 1
+        profile_update_interval: 1
+        profile_title: "UniSub"
+        support_url: "https://example.com/support"
+        profile_web_page_url: "https://example.com/profile"
+        announce: "Welcome to UniSub"
+        routing_enable: true
+        subscription_autoconnect: true
+        subscription_autoconnect_type: "lastused"
+        ping_type: "proxy"
+        change_user_agent: "Happ iOS"
+        app_auto_start: true
+        subscription_auto_update_enable: true
+        subscription_auto_update_open_enable: true
+        proxy_enable: true
+        tun_enable: false
+        tun_mode: "system"
+        tun_type: "singbox"
+        color_profile: "orange"
+        # Provider ID 页面相关参数
+        provider_id: "REPLACE_WITH_PROVIDER_ID"
+        new_url: "https://example.com/new-subscribe"
+        new_domain: "sub.example.com"
+        fallback_url: "https://example.com/fallback"
     sources:
       - name: manual-nodes
         type: manual
