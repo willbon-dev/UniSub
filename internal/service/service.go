@@ -615,8 +615,9 @@ func renderRulesAndProviders(ruleSets []clashRuleSet) ([]string, map[string]map[
 			providers[providerName] = map[string]any{
 				"type":     "http",
 				"behavior": "classical",
+				"format":   "text",
 				"url":      target,
-				"path":     "./ruleset/" + providerName + ".yaml",
+				"path":     "./ruleset/" + providerName + ".txt",
 				"interval": 86400,
 			}
 			rules = append(rules, "RULE-SET,"+providerName+","+policy)

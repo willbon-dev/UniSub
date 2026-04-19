@@ -196,7 +196,7 @@ func TestRenderSubscriptionClash(t *testing.T) {
 	if result.ContentType != "application/yaml; charset=utf-8" {
 		t.Fatalf("ContentType = %q", result.ContentType)
 	}
-	for _, want := range []string{"proxies:", "proxy-groups:", "rules:", "rule-providers:", "[Manual] hk", "[Remote] jp", "MATCH,节点选择", "RULE-SET,provider-1,节点选择"} {
+	for _, want := range []string{"proxies:", "proxy-groups:", "rules:", "rule-providers:", "[Manual] hk", "[Remote] jp", "MATCH,节点选择", "RULE-SET,provider-1,节点选择", "format: text", "path: ./ruleset/provider-1.txt"} {
 		if !strings.Contains(body, want) {
 			t.Fatalf("body missing %q:\n%s", want, body)
 		}

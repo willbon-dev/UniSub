@@ -2,16 +2,16 @@
 
 ## 当前版本
 
-- 当前准备发布版本：`v0.3.0`
-- 当前版本说明文档：[docs/release-v0.3.0.md](release-v0.3.0.md)
+- 当前准备发布版本：`v0.4.1`
+- 当前版本说明文档：[docs/release-v0.4.1.md](release-v0.4.1.md)
 
 ## 自动发布
 
 推送语义化版本 tag，例如：
 
 ```bash
-git tag v0.3.0
-git push origin v0.3.0
+git tag v0.4.1
+git push origin v0.4.1
 ```
 
 GitHub Actions 会自动：
@@ -40,7 +40,7 @@ curl -fsSL https://raw.githubusercontent.com/willbon-dev/UniSub/main/scripts/ins
 安装指定版本：
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/willbon-dev/UniSub/main/scripts/install.sh | sudo bash -s -- --version v0.3.0
+curl -fsSL https://raw.githubusercontent.com/willbon-dev/UniSub/main/scripts/install.sh | sudo bash -s -- --version v0.4.1
 ```
 
 脚本默认会：
@@ -62,7 +62,7 @@ curl -fsSL https://raw.githubusercontent.com/willbon-dev/UniSub/main/scripts/upd
 更新到指定版本：
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/willbon-dev/UniSub/main/scripts/update.sh | sudo bash -s -- --version v0.3.0
+curl -fsSL https://raw.githubusercontent.com/willbon-dev/UniSub/main/scripts/update.sh | sudo bash -s -- --version v0.4.1
 ```
 
 重装并保留配置：
