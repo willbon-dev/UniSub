@@ -20,6 +20,12 @@ const (
 
 	PlatformV2RayN = "V2rayN"
 	PlatformHapp   = "Happ"
+	PlatformClash  = "Clash"
+
+	StyleLinkLine        = "link_line"
+	StyleLinkLinesBase64 = "link_lines_base64"
+	StyleClashProxy      = "clash_proxy"
+	StyleClashProxiesYML = "clash_proxies_yaml"
 )
 
 type Config struct {
@@ -45,7 +51,12 @@ type SubscriptionConfig struct {
 }
 
 type PlatformOptions struct {
-	Happ HappOptions `yaml:"happ"`
+	Happ  HappOptions  `yaml:"happ"`
+	Clash ClashOptions `yaml:"clash"`
+}
+
+type ClashOptions struct {
+	Template string `yaml:"template"`
 }
 
 type HappOptions struct {
@@ -117,14 +128,86 @@ type HappOptions struct {
 type SourceConfig struct {
 	Name            string        `yaml:"name"`
 	Type            string        `yaml:"type"`
+	Platforms       []string      `yaml:"platforms"`
+	Style           string        `yaml:"style"`
 	Prefix          string        `yaml:"prefix"`
 	Entries         []string      `yaml:"entries"`
 	RemoteType      string        `yaml:"remote_type"`
 	URL             string        `yaml:"url"`
+	RequestHeaders  map[string]string `yaml:"request_headers"`
 	RefreshInterval time.Duration `yaml:"refresh_interval"`
 	Timeout         time.Duration `yaml:"timeout"`
 	IncludePatterns []string      `yaml:"include_patterns"`
 	ExcludePatterns []string      `yaml:"exclude_patterns"`
+}
+
+func (s *SourceConfig) UnmarshalYAML(value *yaml.Node) error {
+	type sourceConfigAlias struct {
+		Name            string        `yaml:"name"`
+		Type            string        `yaml:"type"`
+		Platforms       []string      `yaml:"platforms"`
+		Style           string        `yaml:"style"`
+		Prefix          string        `yaml:"prefix"`
+		Entries         []yaml.Node   `yaml:"entries"`
+		RemoteType      string        `yaml:"remote_type"`
+		URL             string        `yaml:"url"`
+		RequestHeaders  map[string]string `yaml:"request_headers"`
+		RefreshInterval time.Duration `yaml:"refresh_interval"`
+		Timeout         time.Duration `yaml:"timeout"`
+		IncludePatterns []string      `yaml:"include_patterns"`
+		ExcludePatterns []string      `yaml:"exclude_patterns"`
+	}
+
+	var aux sourceConfigAlias
+	if err := value.Decode(&aux); err != nil {
+		return err
+	}
+
+	entries := make([]string, 0, len(aux.Entries))
+	for i := range aux.Entries {
+		text, err := renderEntryNode(&aux.Entries[i])
+		if err != nil {
+			return fmt.Errorf("render source entry: %w", err)
+		}
+		entries = append(entries, text)
+	}
+
+	*s = SourceConfig{
+		Name:            aux.Name,
+		Type:            aux.Type,
+		Platforms:       aux.Platforms,
+		Style:           aux.Style,
+		Prefix:          aux.Prefix,
+		Entries:         entries,
+		RemoteType:      aux.RemoteType,
+		URL:             aux.URL,
+		RequestHeaders:  aux.RequestHeaders,
+		RefreshInterval: aux.RefreshInterval,
+		Timeout:         aux.Timeout,
+		IncludePatterns: aux.IncludePatterns,
+		ExcludePatterns: aux.ExcludePatterns,
+	}
+	return nil
+}
+
+func renderEntryNode(node *yaml.Node) (string, error) {
+	if node == nil {
+		return "", nil
+	}
+	if node.Kind == yaml.ScalarNode {
+		return strings.TrimSpace(node.Value), nil
+	}
+
+	var value any
+	if err := node.Decode(&value); err != nil {
+		return "", err
+	}
+
+	rendered, err := yaml.Marshal(value)
+	if err != nil {
+		return "", err
+	}
+	return strings.TrimSpace(string(rendered)), nil
 }
 
 func Load(path string) (*Config, error) {
@@ -170,6 +253,21 @@ func (c *Config) applyDefaults() {
 		if c.Subscriptions[i].DefaultPlatform == "" {
 			c.Subscriptions[i].DefaultPlatform = PlatformV2RayN
 		}
+		c.Subscriptions[i].DefaultPlatform = CanonicalPlatform(c.Subscriptions[i].DefaultPlatform)
+
+		for j := range c.Subscriptions[i].Sources {
+			src := &c.Subscriptions[i].Sources[j]
+			if src.Style == "" {
+				src.Style = legacyRemoteTypeToStyle(src.RemoteType)
+			}
+			src.Style = canonicalStyle(src.Style)
+
+			canonicalPlatforms := make([]string, 0, len(src.Platforms))
+			for _, platform := range src.Platforms {
+				canonicalPlatforms = append(canonicalPlatforms, CanonicalPlatform(platform))
+			}
+			src.Platforms = canonicalPlatforms
+		}
 	}
 }
 
@@ -202,16 +300,39 @@ func (c *Config) Validate() error {
 			if strings.TrimSpace(src.Name) == "" {
 				return fmt.Errorf("subscriptions[%d].sources[%d].name must not be empty", i, j)
 			}
+			if len(src.Platforms) == 0 {
+				return fmt.Errorf("subscriptions[%d].sources[%d].platforms must not be empty", i, j)
+			}
+			for k, platform := range src.Platforms {
+				if !isSupportedPlatform(platform) {
+					return fmt.Errorf("subscriptions[%d].sources[%d].platforms[%d] %q is not supported", i, j, k, platform)
+				}
+			}
+			if !isSupportedStyle(src.Style) {
+				return fmt.Errorf("subscriptions[%d].sources[%d].style %q is not supported", i, j, src.Style)
+			}
 			switch src.Type {
 			case SourceTypeManual:
 				if len(src.Entries) == 0 {
 					return fmt.Errorf("subscriptions[%d].sources[%d].entries must not be empty for manual source", i, j)
 				}
-			case SourceTypeRemote:
-				if src.RemoteType == "" {
-					return fmt.Errorf("subscriptions[%d].sources[%d].remote_type must not be empty", i, j)
+				switch src.Style {
+				case StyleLinkLine:
+					if containsPlatform(src.Platforms, PlatformClash) {
+						return fmt.Errorf("subscriptions[%d].sources[%d].style %q cannot be used with Clash platform", i, j, src.Style)
+					}
+				case StyleClashProxy:
+					if !containsPlatform(src.Platforms, PlatformClash) {
+						return fmt.Errorf("subscriptions[%d].sources[%d].style %q requires Clash platform", i, j, src.Style)
+					}
+				default:
+					return fmt.Errorf("subscriptions[%d].sources[%d].style %q is not valid for manual source", i, j, src.Style)
 				}
-				if !isSupportedRemoteType(src.RemoteType) {
+			case SourceTypeRemote:
+				if src.Style == "" && src.RemoteType == "" {
+					return fmt.Errorf("subscriptions[%d].sources[%d].style must not be empty", i, j)
+				}
+				if strings.TrimSpace(src.RemoteType) != "" && !isSupportedRemoteType(src.RemoteType) {
 					return fmt.Errorf("subscriptions[%d].sources[%d].remote_type %q is not supported", i, j, src.RemoteType)
 				}
 				if strings.TrimSpace(src.URL) == "" {
@@ -224,6 +345,18 @@ func (c *Config) Validate() error {
 					if _, err := regexp.Compile(expr); err != nil {
 						return fmt.Errorf("subscriptions[%d].sources[%d] invalid regexp %q: %w", i, j, expr, err)
 					}
+				}
+				switch src.Style {
+				case StyleLinkLinesBase64:
+					if containsPlatform(src.Platforms, PlatformClash) {
+						return fmt.Errorf("subscriptions[%d].sources[%d].style %q cannot be used with Clash platform", i, j, src.Style)
+					}
+				case StyleClashProxiesYML:
+					if !containsPlatform(src.Platforms, PlatformClash) {
+						return fmt.Errorf("subscriptions[%d].sources[%d].style %q requires Clash platform", i, j, src.Style)
+					}
+				default:
+					return fmt.Errorf("subscriptions[%d].sources[%d].style %q is not valid for remote source", i, j, src.Style)
 				}
 			default:
 				return fmt.Errorf("subscriptions[%d].sources[%d].type %q is not supported", i, j, src.Type)
@@ -239,6 +372,8 @@ func CanonicalPlatform(name string) string {
 		return PlatformV2RayN
 	case "happ":
 		return PlatformHapp
+	case "clash":
+		return PlatformClash
 	default:
 		return ""
 	}
@@ -246,7 +381,7 @@ func CanonicalPlatform(name string) string {
 
 func isSupportedPlatform(name string) bool {
 	switch strings.TrimSpace(name) {
-	case PlatformV2RayN, PlatformHapp:
+	case PlatformV2RayN, PlatformHapp, PlatformClash:
 		return true
 	default:
 		return false
@@ -260,6 +395,48 @@ func isSupportedRemoteType(name string) bool {
 	default:
 		return false
 	}
+}
+
+func canonicalStyle(name string) string {
+	switch strings.ToLower(strings.TrimSpace(name)) {
+	case StyleLinkLine:
+		return StyleLinkLine
+	case StyleLinkLinesBase64:
+		return StyleLinkLinesBase64
+	case StyleClashProxy:
+		return StyleClashProxy
+	case StyleClashProxiesYML:
+		return StyleClashProxiesYML
+	default:
+		return ""
+	}
+}
+
+func isSupportedStyle(name string) bool {
+	switch name {
+	case StyleLinkLine, StyleLinkLinesBase64, StyleClashProxy, StyleClashProxiesYML:
+		return true
+	default:
+		return false
+	}
+}
+
+func legacyRemoteTypeToStyle(name string) string {
+	switch strings.TrimSpace(name) {
+	case RemoteTypeBase64Lines:
+		return StyleLinkLinesBase64
+	default:
+		return ""
+	}
+}
+
+func containsPlatform(platforms []string, want string) bool {
+	for _, platform := range platforms {
+		if platform == want {
+			return true
+		}
+	}
+	return false
 }
 
 var uuidPattern = regexp.MustCompile(`(?i)^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$`)

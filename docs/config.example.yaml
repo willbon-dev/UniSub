@@ -12,10 +12,7 @@ subscriptions:
     default_platform: V2rayN
     platform_options:
       happ:
-        # 首行 routing（Happ 要求）
         routing: "happ://routing/onadd/REPLACE_WITH_YOUR_ROUTING_PAYLOAD"
-        # 以下每个字段都会生成订阅注释行，例如：
-        # profile_update_interval: 1 => #profile-update-interval: 1
         profile_update_interval: 1
         profile_title: "UniSub"
         support_url: "https://example.com/support"
@@ -29,27 +26,31 @@ subscriptions:
         app_auto_start: true
         subscription_auto_update_enable: true
         subscription_auto_update_open_enable: true
-        proxy_enable: true
-        tun_enable: false
-        tun_mode: "system"
-        tun_type: "singbox"
-        color_profile: "orange"
-        # Provider ID 页面相关参数
-        provider_id: "REPLACE_WITH_PROVIDER_ID"
-        new_url: "https://example.com/new-subscribe"
-        new_domain: "sub.example.com"
-        fallback_url: "https://example.com/fallback"
+      clash:
+        template: "./Self.ini"
     sources:
-      - name: manual-nodes
+      - name: manual-links
         type: manual
+        style: link_line
+        platforms: [V2rayN, Happ]
         prefix: "[Manual] "
         entries:
           - "vmess://REPLACE_WITH_YOUR_NODE"
           - "vless://REPLACE_WITH_YOUR_NODE"
           - "ss://REPLACE_WITH_YOUR_NODE"
 
+      - name: manual-clash-proxy
+        type: manual
+        style: clash_proxy
+        platforms: [Clash]
+        prefix: "[ClashManual] "
+        entries:
+          - "{ name: 'Example Clash Node', type: vmess, server: demo.example.com, port: 443, uuid: 123e4567-e89b-42d3-a456-426614174001, alterId: 0, cipher: auto, udp: true, network: ws, ws-opts: { path: /websocket, headers: { Host: demo-edge.example.com } } }"
+
       - name: upstream-base64-lines
         type: remote
+        style: link_lines_base64
+        platforms: [V2rayN, Happ]
         prefix: "[JP] "
         remote_type: base64_lines
         url: "https://example.com/api/v1/client/subscribe?token=REPLACE_ME"
@@ -59,4 +60,17 @@ subscriptions:
         exclude_patterns:
           - "剩余流量"
           - "套餐到期"
-          - "过滤掉"
+
+      - name: upstream-clash-yaml
+        type: remote
+        style: clash_proxies_yaml
+        platforms: [Clash]
+        prefix: "[ClashRemote] "
+        url: "https://example.com/clash-subscription.yaml"
+        request_headers:
+          User-Agent: "clash-verge"
+        refresh_interval: 30m
+        timeout: 15s
+        include_patterns: []
+        exclude_patterns:
+          - "剩余流量"

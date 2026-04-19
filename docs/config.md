@@ -1,12 +1,17 @@
 # 配置说明
 
-本文档按 `docs/config.example.yaml` 的结构，逐项说明 UniSub 的配置含义、作用和使用场景。
+本文档按 [docs/config.example.yaml](config.example.yaml) 的结构，详细说明 UniSub 当前支持的配置项、适用场景和输出行为。
 
-- 示例配置文件：[docs/config.example.yaml](config.example.yaml)
-- Happ 应用管理文档：https://www.happ.su/main/zh/dev-docs/ying-yong-guan-li
-- Happ 路由文档：https://www.happ.su/main/zh/dev-docs/routing
-- Happ Provider ID 文档：https://www.happ.su/main/zh/dev-docs/provide-id
-- Happ 路由编辑在线工具：https://utils.docs.rw/happ-rb
+UniSub 现在支持三种目标平台：
+
+- `V2rayN`
+- `Happ`
+- `Clash`
+
+同时支持两种 source 类型：
+
+- `manual`：直接在配置里写节点
+- `remote`：从远程 URL 拉取订阅
 
 ## 顶层结构
 
@@ -15,529 +20,535 @@ server:
 subscriptions:
 ```
 
-### `server`
+## server
 
-#### `server.listen`
+### `server.listen`
 
-- 含义：HTTP 服务监听地址。
-- 作用：决定 UniSub 绑定的 IP 和端口。
-- 示例：`127.0.0.1:8080`
+- 含义：HTTP 服务监听地址
+- 默认值：`127.0.0.1:8080`
+- 示例：`0.0.0.0:8080`
 
-#### `server.read_timeout`
+### `server.read_timeout`
 
-- 含义：读取客户端请求的超时时间。
-- 作用：防止慢连接长期占用服务端资源。
-- 示例：`10s`
+- 含义：读取客户端请求的超时时间
+- 默认值：`10s`
 
-#### `server.write_timeout`
+### `server.write_timeout`
 
-- 含义：向客户端写回订阅内容的超时时间。
-- 作用：避免客户端接收过慢导致连接长期挂起。
-- 示例：`30s`
+- 含义：写回订阅响应的超时时间
+- 默认值：`30s`
 
-#### `server.shutdown_timeout`
+### `server.shutdown_timeout`
 
-- 含义：服务优雅关闭时的最长等待时间。
-- 作用：控制进程退出前等待中的请求收尾时间。
-- 示例：`10s`
+- 含义：服务优雅关闭时等待中的请求收尾时间
+- 默认值：`10s`
 
-#### `server.fetch_timeout`
+### `server.fetch_timeout`
 
-- 含义：远程订阅拉取的默认超时时间。
-- 作用：为 `remote` 类型源提供统一的网络请求超时上限。
-- 示例：`20s`
+- 含义：远程 source 的默认抓取超时时间
+- 默认值：`20s`
+- 说明：如果某个 `remote source` 自己写了 `timeout`，则优先使用 source 自己的值
 
-#### `server.max_response_bytes`
+### `server.max_response_bytes`
 
-- 含义：远程订阅响应体的最大允许字节数。
-- 作用：避免异常大响应拖垮内存或处理流程。
-- 示例：`8388608`
+- 含义：远程 source 响应体的最大允许大小
+- 默认值：`8388608`
+- 说明：超过这个大小会直接报错，防止异常响应占满内存
 
-### `subscriptions`
+## subscriptions
 
-`subscriptions` 是统一订阅列表。每个元素对应一个可通过 `/subscribe?secret=...` 访问的聚合订阅。
+`subscriptions` 是统一订阅入口列表。每个元素对应一个可以通过 `/subscribe?secret=...` 访问的聚合订阅。
 
-#### `subscriptions[].name`
+```yaml
+subscriptions:
+  - name: default-subscription
+    secret: "123e4567-e89b-42d3-a456-426614174000"
+    default_platform: V2rayN
+    platform_options:
+      happ: {}
+      clash: {}
+    sources: []
+```
 
-- 含义：该统一订阅的名称。
-- 作用：用于内部区分配置项和日志定位。
+### `subscriptions[].name`
 
-#### `subscriptions[].secret`
+- 含义：订阅名称
+- 作用：用于日志定位和内部区分
 
-- 含义：该统一订阅的访问密钥，必须是 UUID。
-- 作用：客户端通过 `GET /subscribe?secret=...` 使用它访问对应订阅。
+### `subscriptions[].secret`
 
-#### `subscriptions[].default_platform`
+- 含义：订阅访问密钥
+- 要求：必须是 UUID，且在所有订阅之间唯一
+- 使用方式：客户端通过 `GET /subscribe?secret=...` 访问对应订阅
 
-- 含义：默认输出平台。
-- 作用：当请求中未显式传 `platform` 参数时，决定返回 `V2rayN` 还是 `Happ` 格式。
-- 可选值：`V2rayN`、`Happ`
+### `subscriptions[].default_platform`
 
-#### `subscriptions[].platform_options`
+- 含义：默认输出平台
+- 可选值：`V2rayN`、`Happ`、`Clash`
+- 作用：当请求中没有显式传 `platform` 参数时，使用这个平台输出
 
-- 含义：平台定制输出配置。
-- 作用：当前仅用于 `Happ` 平台注释行和路由行生成。
+示例：
 
-### `subscriptions[].sources`
+```yaml
+default_platform: Clash
+```
 
-每个 `source` 表示一个节点来源，支持手动录入和远程拉取两种方式。
+## platform_options
 
-#### `subscriptions[].sources[].name`
+`platform_options` 用于平台特定输出行为。
 
-- 含义：源名称。
-- 作用：用于日志和错误定位。
+```yaml
+platform_options:
+  happ:
+    routing: "happ://routing/onadd/..."
+  clash:
+    template: "./Self.ini"
+```
 
-#### `subscriptions[].sources[].type`
+### `platform_options.happ`
 
-- 含义：源类型。
-- 作用：决定当前源是读取 `entries` 还是拉取 `url`。
+`Happ` 平台继续沿用原有实现：
+
+- 支持 `routing`
+- 支持各类 Happ 注释行
+- 请求 `platform=Happ` 时，会在节点前插入 routing 和注释行
+
+### `platform_options.clash`
+
+#### `platform_options.clash.template`
+
+- 含义：Clash 模板来源
+- 类型：字符串
+- 支持：
+  - 本地文件路径，例如 `./Self.ini`
+  - 远程 URL，例如 `https://example.com/Self.ini`
+
+示例：
+
+```yaml
+platform_options:
+  clash:
+    template: "./Self.ini"
+```
+
+说明：
+
+- 请求平台为 `Clash` 时必须能读到模板，否则会报错
+- 当前实现按“最小 subconverter 兼容”处理模板
+- 当前支持读取：
+  - `custom_proxy_group=...`
+  - `ruleset=...`
+  - `clash_rule_base=...`
+- UniSub 会将聚合后的 `proxies` 注入到最终生成的 Clash YAML 中
+
+当前边界：
+
+- 这不是完整的外部 `subconverter` 替代实现
+- 不保证覆盖 ACL4SSR / subconverter 的全部高级语义
+- 当前版本重点保证“能生成合法 Clash YAML 并把聚合节点注入进去”
+
+## sources
+
+每个 `source` 表示一个节点来源。
+
+```yaml
+sources:
+  - name: source-name
+    type: manual
+    platforms: [Clash]
+    style: clash_proxy
+```
+
+所有 source 都有以下通用字段。
+
+### `subscriptions[].sources[].name`
+
+- 含义：source 名称
+- 作用：错误定位、日志输出
+
+### `subscriptions[].sources[].type`
+
+- 含义：source 类型
 - 可选值：`manual`、`remote`
 
-#### `subscriptions[].sources[].prefix`
+### `subscriptions[].sources[].platforms`
 
-- 含义：节点名前缀。
-- 作用：会附加到该源下所有节点的显示名称前，便于区分来源。
-- 示例：`[JP] `
+- 含义：该 source 适用的平台列表
+- 当前是必填字段
+- 可选值：`V2rayN`、`Happ`、`Clash`
 
-#### `subscriptions[].sources[].entries`
+示例：
 
-- 含义：手动节点列表。
-- 作用：仅在 `type: manual` 时使用，支持直接填写 `vmess://`、`vless://`、`ss://`、`trojan://` 等链接。
+```yaml
+platforms: [V2rayN, Happ]
+platforms: [Clash]
+```
 
-#### `subscriptions[].sources[].remote_type`
+作用：
 
-- 含义：远程订阅解析类型。
-- 作用：决定 UniSub 如何解释远程 HTTP 响应内容。
-- 当前支持：`base64_lines`
+- 请求某个平台时，只会聚合 `platforms` 包含该平台的 source
+- 不同平台之间不会再无差别混用 source
 
-#### `subscriptions[].sources[].url`
+### `subscriptions[].sources[].style`
 
-- 含义：远程订阅地址。
-- 作用：仅在 `type: remote` 时使用，用于拉取上游订阅内容。
+- 含义：当前 source 的解析风格
+- 当前是必填字段
 
-#### `subscriptions[].sources[].refresh_interval`
+支持的 style：
 
-- 含义：远程订阅缓存刷新间隔。
-- 作用：在间隔内复用缓存，超过间隔后重新拉取上游。
-- 示例：`30m`
+- `link_line`
+- `link_lines_base64`
+- `clash_proxy`
+- `clash_proxies_yaml`
 
-#### `subscriptions[].sources[].timeout`
+详细说明见下文“style 一览”。
 
-- 含义：当前远程源的单独请求超时。
-- 作用：覆盖 `server.fetch_timeout`，适合为个别慢源单独放宽或收紧超时。
-- 示例：`15s`
+### `subscriptions[].sources[].prefix`
 
-#### `subscriptions[].sources[].include_patterns`
+- 含义：给该 source 下的节点名称加统一前缀
+- 作用：区分来源
 
-- 含义：节点名正则白名单。
-- 作用：只有名称匹配这些 Go regexp 的节点会被保留。
+示例：
 
-#### `subscriptions[].sources[].exclude_patterns`
+```yaml
+prefix: "[JP] "
+```
 
-- 含义：节点名正则黑名单。
-- 作用：名称匹配这些 Go regexp 的节点会被过滤掉。
+### `subscriptions[].sources[].include_patterns`
 
-## Happ 配置
+- 含义：节点名白名单正则
+- 作用：只有名称匹配这些正则的节点才会保留
 
-`subscriptions[].platform_options.happ` 下的字段只在 `platform=Happ` 或默认平台为 `Happ` 时生效。UniSub 会把这些配置转换为 Happ 所需的首行 `routing` 或注释行。
+### `subscriptions[].sources[].exclude_patterns`
 
-### 路由
+- 含义：节点名黑名单正则
+- 作用：名称匹配这些正则的节点会被过滤掉
 
-#### `subscriptions[].platform_options.happ.routing`
+说明：
 
-- 含义：Happ 路由链接。
-- 作用：作为返回订阅的首行输出，供 Happ 导入或自动启用路由配置。
-- 输出形式：`happ://routing/...`
-- 官方文档：https://www.happ.su/main/zh/dev-docs/routing
-- 路由编辑器：https://utils.docs.rw/happ-rb
+- `include_patterns` / `exclude_patterns` 都基于节点名生效
+- 对链接节点读取显示名
+- 对 Clash 节点读取 `name`
 
-### 应用管理基础参数
+## style 一览
 
-#### `subscriptions[].platform_options.happ.profile_update_interval`
+### `link_line`
 
-- 含义：订阅自动更新时间间隔，单位小时。
-- 作用：在 Happ 中创建定时更新任务。
-- 输出示例：`#profile-update-interval: 1`
-- 官方文档：https://www.happ.su/main/zh/dev-docs/ying-yong-guan-li
+- 适用 source 类型：`manual`
+- 内容格式：单条代理链接
+- 适用平台：`V2rayN`、`Happ`
+- 常见内容：
+  - `vmess://...`
+  - `vless://...`
+  - `ss://...`
+  - `trojan://...`
 
-#### `subscriptions[].platform_options.happ.profile_title`
+注意：
 
-- 含义：订阅显示名称。
-- 作用：控制 Happ 中订阅条目的标题。
-- 输出示例：`#profile-title: UniSub`
-- 官方文档：https://www.happ.su/main/zh/dev-docs/ying-yong-guan-li
+- `link_line` 不能与 `Clash` 平台组合
+- 如果 `platforms` 里包含 `Clash`，配置校验会报错
 
-#### `subscriptions[].platform_options.happ.subscription_userinfo`
+### `link_lines_base64`
 
-- 含义：订阅流量和到期信息。
-- 作用：在 Happ 中显示上传、下载、总流量和到期时间。
-- 输出示例：`#subscription-userinfo: upload=0; download=0; total=0; expire=1790951622`
-- 官方文档：https://www.happ.su/main/zh/dev-docs/ying-yong-guan-li
+- 适用 source 类型：`remote`
+- 内容格式：整个 HTTP 响应为 Base64，解码后得到多行代理链接
+- 适用平台：`V2rayN`、`Happ`
 
-#### `subscriptions[].platform_options.happ.support_url`
+说明：
 
-- 含义：支持页面链接。
-- 作用：在订阅项旁显示支持入口按钮。
-- 官方文档：https://www.happ.su/main/zh/dev-docs/ying-yong-guan-li
+- 这就是传统机场订阅常见的返回方式
+- 当前旧配置中的 `remote_type: base64_lines` 会自动兼容映射到这个 style
 
-#### `subscriptions[].platform_options.happ.profile_web_page_url`
+### `clash_proxy`
 
-- 含义：订阅主页链接。
-- 作用：在订阅项旁显示站点入口按钮。
-- 官方文档：https://www.happ.su/main/zh/dev-docs/ying-yong-guan-li
+- 适用 source 类型：`manual`
+- 内容格式：单条 Clash 风格代理对象
+- 适用平台：`Clash`
 
-#### `subscriptions[].platform_options.happ.announce`
+说明：
 
-- 含义：订阅公告文本。
-- 作用：在 Happ 中展示订阅公告信息。
-- 官方文档：https://www.happ.su/main/zh/dev-docs/ying-yong-guan-li
+- `entries` 中可以直接写字符串形式的对象
+- 也可以直接写原生 YAML 对象
+- 当前实现会同时兼容这两种写法
 
-#### `subscriptions[].platform_options.happ.routing_enable`
+### `clash_proxies_yaml`
+
+- 适用 source 类型：`remote`
+- 内容格式：远程返回 Clash YAML，并从其中读取 `proxies:`
+- 适用平台：`Clash`
 
-- 含义：是否允许全局路由功能。
-- 作用：控制 Happ 中路由能力的启用或禁用。
-- 官方文档：https://www.happ.su/main/zh/dev-docs/ying-yong-guan-li
+说明：
 
-#### `subscriptions[].platform_options.happ.custom_tunnel_config`
+- 如果上游默认返回的是 Base64 链接订阅，而不是 Clash YAML，那么这个 style 会报解析错误
+- 某些上游需要特定 `User-Agent` 才会切换到 Clash YAML，这时需要使用 `request_headers`
 
-- 含义：自定义隧道配置。
-- 作用：向桌面版 Happ 的 sing-box 核心传入隧道配置。
-- 官方文档：https://www.happ.su/main/zh/dev-docs/ying-yong-guan-li
+## manual source
 
-### Provider ID 相关参数
+### `manual + link_line`
 
-以下字段属于高级参数，通常需要配合 `provider_id` 使用。
+示例：
 
-#### `subscriptions[].platform_options.happ.provider_id`
+```yaml
+- name: manual-links
+  type: manual
+  style: link_line
+  platforms: [V2rayN, Happ]
+  prefix: "[Manual] "
+  entries:
+    - "vmess://REPLACE_WITH_YOUR_NODE"
+    - "vless://REPLACE_WITH_YOUR_NODE"
+    - "ss://REPLACE_WITH_YOUR_NODE"
+```
 
-- 含义：Provider ID。
-- 作用：启用 Happ 的高级订阅管理与部分应用设置控制能力。
-- 官方文档：https://www.happ.su/main/zh/dev-docs/provide-id
+说明：
 
-#### `subscriptions[].platform_options.happ.new_url`
+- `entries` 为必填
+- 每一项都是一条代理链接
+- 会参与前缀改名和正则过滤
 
-- 含义：新的完整订阅地址。
-- 作用：当旧订阅地址不可用时，自动替换为新的完整 URL。
-- 官方文档：https://www.happ.su/main/zh/dev-docs/ying-yong-guan-li
+### `manual + clash_proxy`
 
-#### `subscriptions[].platform_options.happ.new_domain`
+字符串写法示例：
 
-- 含义：新的订阅域名。
-- 作用：只替换订阅地址的域名，保留其余路径和参数。
-- 官方文档：https://www.happ.su/main/zh/dev-docs/ying-yong-guan-li
+```yaml
+- name: manual-clash-proxy
+  type: manual
+  style: clash_proxy
+  platforms: [Clash]
+  entries:
+    - "{ name: 'Example Clash Node', type: vmess, server: demo.example.com, port: 443 }"
+```
 
-#### `subscriptions[].platform_options.happ.fallback_url`
+原生 YAML 对象写法示例：
 
-- 含义：备用订阅地址。
-- 作用：主地址不可访问、返回 300-599 或超时时自动回退。
-- 官方文档：https://www.happ.su/main/zh/dev-docs/ying-yong-guan-li
+```yaml
+- name: manual-clash-proxy
+  type: manual
+  style: clash_proxy
+  platforms: [Clash]
+  entries:
+    - { name: "Example Clash Node", type: vmess, server: demo.example.com, port: 443 }
+```
 
-### 高级与应用设置参数
+说明：
 
-#### `subscriptions[].platform_options.happ.no_limit_enabled`
+- 两种写法当前都支持
+- 会按 `name` 做过滤和前缀处理
+- 会按代理内容去重
 
-- 含义：为全部协议启用 No Limit 模式。
-- 作用：提升 xray-core 内存限制，改善稳定性与性能。
-- 官方文档：https://www.happ.su/main/zh/dev-docs/ying-yong-guan-li
+## remote source
 
-#### `subscriptions[].platform_options.happ.no_limit_xhttp_enabled`
+### `remote + link_lines_base64`
 
-- 含义：仅为 xhttp 启用 No Limit 模式。
-- 作用：只对 xhttp 场景应用 No Limit 模式。
-- 官方文档：https://www.happ.su/main/zh/dev-docs/ying-yong-guan-li
+示例：
 
-#### `subscriptions[].platform_options.happ.subscription_always_hwid_enable`
+```yaml
+- name: upstream-base64-lines
+  type: remote
+  style: link_lines_base64
+  platforms: [V2rayN, Happ]
+  url: "https://example.com/api/v1/client/subscribe?token=REPLACE_ME"
+  refresh_interval: 30m
+  timeout: 15s
+```
 
-- 含义：强制启用 HWID。
-- 作用：防止用户在 Happ 中关闭 HWID 转发。
-- 官方文档：https://www.happ.su/main/zh/dev-docs/ying-yong-guan-li
+字段说明：
 
-#### `subscriptions[].platform_options.happ.notification_subs_expire`
+- `url`：必填，远程订阅地址
+- `refresh_interval`：必填，缓存刷新间隔
+- `timeout`：可选，当前 source 的独立请求超时
 
-- 含义：订阅到期通知开关。
-- 作用：在到期前向用户发送续订提醒。
-- 官方文档：https://www.happ.su/main/zh/dev-docs/ying-yong-guan-li
+### `remote + clash_proxies_yaml`
 
-#### `subscriptions[].platform_options.happ.hide_settings`
+示例：
 
-- 含义：隐藏服务器设置。
-- 作用：禁止用户查看和编辑订阅中的服务器配置。
-- 官方文档：https://www.happ.su/main/zh/dev-docs/ying-yong-guan-li
+```yaml
+- name: upstream-clash-yaml
+  type: remote
+  style: clash_proxies_yaml
+  platforms: [Clash]
+  url: "https://example.com/clash-subscription.yaml"
+  request_headers:
+    User-Agent: "clash-verge"
+  refresh_interval: 30m
+  timeout: 15s
+```
 
-#### `subscriptions[].platform_options.happ.server_address_resolve_enable`
+字段说明：
 
-- 含义：服务端地址预解析开关。
-- 作用：在连接前由 Happ 先解析服务器域名。
-- 官方文档：https://www.happ.su/main/zh/dev-docs/ying-yong-guan-li
+- `url`：必填
+- `refresh_interval`：必填
+- `timeout`：可选
+- `request_headers`：可选，自定义请求头
 
-#### `subscriptions[].platform_options.happ.server_address_resolve_dns_domain`
+#### `subscriptions[].sources[].request_headers`
 
-- 含义：域名预解析使用的 DoH 域名。
-- 作用：指定 Happ 进行解析时使用的 DNS 服务地址。
-- 官方文档：https://www.happ.su/main/zh/dev-docs/ying-yong-guan-li
+- 含义：远程请求时附带的 HTTP 请求头
+- 典型用途：某些上游只有带特定 `User-Agent` 才会返回 Clash YAML
 
-#### `subscriptions[].platform_options.happ.server_address_resolve_dns_ip`
+示例：
 
-- 含义：域名预解析使用的 DNS IP。
-- 作用：配合上面的 DNS 域名指定解析目标。
-- 官方文档：https://www.happ.su/main/zh/dev-docs/ying-yong-guan-li
+```yaml
+request_headers:
+  User-Agent: "clash-verge"
+```
 
-#### `subscriptions[].platform_options.happ.subscription_autoconnect`
+常见场景：
 
-- 含义：启动应用时自动连接。
-- 作用：打开 Happ 后自动连接服务器。
-- 官方文档：https://www.happ.su/main/zh/dev-docs/ying-yong-guan-li
+- 默认访问上游返回 Base64 链接订阅
+- 带 `User-Agent: clash-verge` 后返回 `proxies:` 开头的 Clash YAML
+- 这种情况下必须配置 `request_headers`，否则 `clash_proxies_yaml` 会解析失败
 
-#### `subscriptions[].platform_options.happ.subscription_autoconnect_type`
+## 兼容说明
 
-- 含义：自动连接策略。
-- 作用：指定自动连接到哪一类服务器，例如最近使用节点。
-- 官方文档：https://www.happ.su/main/zh/dev-docs/ying-yong-guan-li
+### `remote_type`
 
-#### `subscriptions[].platform_options.happ.subscription_ping_onopen_enabled`
+旧配置中的：
 
-- 含义：打开应用时自动 Ping。
-- 作用：在进入 Happ 时自动测试节点延迟。
-- 官方文档：https://www.happ.su/main/zh/dev-docs/ying-yong-guan-li
+```yaml
+remote_type: base64_lines
+```
 
-#### `subscriptions[].platform_options.happ.subscription_auto_update_enable`
+仍然兼容。
 
-- 含义：全局自动更新开关。
-- 作用：统一控制 Happ 内所有订阅的自动更新能力。
-- 官方文档：https://www.happ.su/main/zh/dev-docs/ying-yong-guan-li
+兼容规则：
 
-#### `subscriptions[].platform_options.happ.fragmentation_enable`
+- 如果 `style` 已写，则以 `style` 为准
+- 如果 `style` 没写，但 `remote_type: base64_lines` 已写，则自动映射为：
 
-- 含义：全局分片开关。
-- 作用：统一控制 Happ 对订阅分片能力的启用状态。
-- 官方文档：https://www.happ.su/main/zh/dev-docs/ying-yong-guan-li
+```yaml
+style: link_lines_base64
+```
 
-#### `subscriptions[].platform_options.happ.fragmentation_packets`
-
-- 含义：分片包类型配置。
-- 作用：控制 Happ 分片参数中的 `packets`。
-- 官方文档：https://www.happ.su/main/zh/dev-docs/ying-yong-guan-li
-
-#### `subscriptions[].platform_options.happ.fragmentation_length`
-
-- 含义：分片长度配置。
-- 作用：控制 Happ 分片参数中的 `length`。
-- 官方文档：https://www.happ.su/main/zh/dev-docs/ying-yong-guan-li
-
-#### `subscriptions[].platform_options.happ.fragmentation_interval`
-
-- 含义：分片间隔配置。
-- 作用：控制 Happ 分片参数中的 `interval`。
-- 官方文档：https://www.happ.su/main/zh/dev-docs/ying-yong-guan-li
-
-#### `subscriptions[].platform_options.happ.fragmentation_maxsplit`
-
-- 含义：最大分片数配置。
-- 作用：控制 Happ 分片拆分上限。
-- 官方文档：https://www.happ.su/main/zh/dev-docs/ying-yong-guan-li
-
-#### `subscriptions[].platform_options.happ.noises_enable`
-
-- 含义：噪声开关。
-- 作用：控制 Happ 的噪声功能是否启用。
-- 官方文档：https://www.happ.su/main/zh/dev-docs/ying-yong-guan-li
-
-#### `subscriptions[].platform_options.happ.noises_type`
-
-- 含义：噪声类型。
-- 作用：指定 Happ 使用的噪声模式。
-- 官方文档：https://www.happ.su/main/zh/dev-docs/ying-yong-guan-li
-
-#### `subscriptions[].platform_options.happ.noises_packet`
-
-- 含义：噪声包配置。
-- 作用：控制 Happ 噪声功能中的包参数。
-- 官方文档：https://www.happ.su/main/zh/dev-docs/ying-yong-guan-li
-
-#### `subscriptions[].platform_options.happ.noises_delay`
-
-- 含义：噪声延迟配置。
-- 作用：控制 Happ 噪声发包延迟。
-- 官方文档：https://www.happ.su/main/zh/dev-docs/ying-yong-guan-li
-
-#### `subscriptions[].platform_options.happ.noises_applyto`
-
-- 含义：噪声应用范围。
-- 作用：指定噪声对哪些连接或节点生效。
-- 官方文档：https://www.happ.su/main/zh/dev-docs/ying-yong-guan-li
-
-#### `subscriptions[].platform_options.happ.ping_type`
-
-- 含义：Ping 类型。
-- 作用：设置 Happ 使用 `via Proxy`、`TCP` 或 `ICMP` 方式测试延迟。
-- 官方文档：https://www.happ.su/main/zh/dev-docs/ying-yong-guan-li
-
-#### `subscriptions[].platform_options.happ.check_url_via_proxy`
-
-- 含义：代理 Ping 使用的检测 URL。
-- 作用：在 `ping_type` 为代理检测时指定检查地址。
-- 官方文档：https://www.happ.su/main/zh/dev-docs/ying-yong-guan-li
-
-#### `subscriptions[].platform_options.happ.change_user_agent`
-
-- 含义：订阅请求使用的 User-Agent。
-- 作用：让 Happ 拉取订阅时使用指定请求头。
-- 官方文档：https://www.happ.su/main/zh/dev-docs/ying-yong-guan-li
-
-#### `subscriptions[].platform_options.happ.app_auto_start`
-
-- 含义：应用自动启动开关。
-- 作用：控制 Happ 在系统启动后的自动启动行为。
-- 官方文档：https://www.happ.su/main/zh/dev-docs/ying-yong-guan-li
-
-#### `subscriptions[].platform_options.happ.subscription_auto_update_open_enable`
-
-- 含义：打开应用时检查自动更新。
-- 作用：控制 Happ 在进入应用时触发订阅自动更新检查。
-- 官方文档：https://www.happ.su/main/zh/dev-docs/ying-yong-guan-li
-
-#### `subscriptions[].platform_options.happ.per_app_proxy_mode`
-
-- 含义：分应用代理模式。
-- 作用：指定 Happ 的分应用代理工作模式。
-- 官方文档：https://www.happ.su/main/zh/dev-docs/ying-yong-guan-li
-
-#### `subscriptions[].platform_options.happ.per_app_proxy_list`
-
-- 含义：分应用代理列表。
-- 作用：定义按应用分流时的目标应用集合。
-- 官方文档：https://www.happ.su/main/zh/dev-docs/ying-yong-guan-li
-
-#### `subscriptions[].platform_options.happ.sniffing_enable`
-
-- 含义：嗅探开关。
-- 作用：控制 Happ 的流量嗅探能力。
-- 官方文档：https://www.happ.su/main/zh/dev-docs/ying-yong-guan-li
-
-#### `subscriptions[].platform_options.happ.subscriptions_collapse`
-
-- 含义：订阅列表默认折叠。
-- 作用：控制 Happ 中订阅分组的折叠展示状态。
-- 官方文档：https://www.happ.su/main/zh/dev-docs/ying-yong-guan-li
-
-#### `subscriptions[].platform_options.happ.subscriptions_expand_now`
-
-- 含义：立即展开订阅列表。
-- 作用：控制 Happ 当前是否直接展开显示订阅项。
-- 官方文档：https://www.happ.su/main/zh/dev-docs/ying-yong-guan-li
-
-#### `subscriptions[].platform_options.happ.ping_result`
-
-- 含义：预设 Ping 结果文本。
-- 作用：为 Happ 展示的延迟结果或状态文本提供初始值。
-- 官方文档：https://www.happ.su/main/zh/dev-docs/ying-yong-guan-li
-
-#### `subscriptions[].platform_options.happ.mux_enable`
-
-- 含义：MUX 开关。
-- 作用：控制 Happ 是否启用连接复用。
-- 官方文档：https://www.happ.su/main/zh/dev-docs/ying-yong-guan-li
-
-#### `subscriptions[].platform_options.happ.mux_tcp_connections`
-
-- 含义：TCP MUX 连接数。
-- 作用：设置 Happ 的 TCP 复用连接数量。
-- 官方文档：https://www.happ.su/main/zh/dev-docs/ying-yong-guan-li
-
-#### `subscriptions[].platform_options.happ.mux_xudp_connections`
-
-- 含义：XUDP MUX 连接数。
-- 作用：设置 Happ 的 XUDP 复用连接数量。
-- 官方文档：https://www.happ.su/main/zh/dev-docs/ying-yong-guan-li
-
-#### `subscriptions[].platform_options.happ.mux_quic`
-
-- 含义：QUIC MUX 配置。
-- 作用：控制 Happ 中与 QUIC 相关的复用行为。
-- 官方文档：https://www.happ.su/main/zh/dev-docs/ying-yong-guan-li
-
-#### `subscriptions[].platform_options.happ.proxy_enable`
-
-- 含义：代理总开关。
-- 作用：控制 Happ 是否启用代理功能。
-- 官方文档：https://www.happ.su/main/zh/dev-docs/ying-yong-guan-li
-
-#### `subscriptions[].platform_options.happ.tun_enable`
-
-- 含义：TUN 开关。
-- 作用：控制 Happ 是否启用 TUN 模式。
-- 官方文档：https://www.happ.su/main/zh/dev-docs/ying-yong-guan-li
-
-#### `subscriptions[].platform_options.happ.tun_mode`
-
-- 含义：TUN 模式类型。
-- 作用：设置 Happ 的 TUN 工作模式。
-- 官方文档：https://www.happ.su/main/zh/dev-docs/ying-yong-guan-li
-
-#### `subscriptions[].platform_options.happ.tun_type`
-
-- 含义：TUN 内核类型。
-- 作用：指定 Happ 使用的 TUN 实现。
-- 官方文档：https://www.happ.su/main/zh/dev-docs/ying-yong-guan-li
-
-#### `subscriptions[].platform_options.happ.exclude_routes`
-
-- 含义：排除路由列表。
-- 作用：定义不经过 TUN 或代理处理的路由规则。
-- 官方文档：https://www.happ.su/main/zh/dev-docs/ying-yong-guan-li
-
-#### `subscriptions[].platform_options.happ.color_profile`
-
-- 含义：订阅配色方案。
-- 作用：设置 Happ 中订阅卡片或条目的颜色主题。
-- 官方文档：https://www.happ.su/main/zh/dev-docs/ying-yong-guan-li
-
-#### `subscriptions[].platform_options.happ.sub_info_color`
-
-- 含义：订阅信息区域颜色。
-- 作用：控制附加订阅信息的显示颜色。
-- 官方文档：https://www.happ.su/main/zh/dev-docs/ying-yong-guan-li
-
-#### `subscriptions[].platform_options.happ.sub_info_text`
-
-- 含义：订阅信息文本。
-- 作用：在 Happ 中显示自定义附加说明文本。
-- 官方文档：https://www.happ.su/main/zh/dev-docs/ying-yong-guan-li
-
-#### `subscriptions[].platform_options.happ.sub_info_button_text`
-
-- 含义：订阅信息按钮文本。
-- 作用：定义附加信息区域按钮的显示文字。
-- 官方文档：https://www.happ.su/main/zh/dev-docs/ying-yong-guan-li
-
-#### `subscriptions[].platform_options.happ.sub_info_button_link`
-
-- 含义：订阅信息按钮链接。
-- 作用：定义附加信息区域按钮的跳转地址。
-- 官方文档：https://www.happ.su/main/zh/dev-docs/ying-yong-guan-li
-
-#### `subscriptions[].platform_options.happ.sub_expire`
-
-- 含义：订阅到期开关。
-- 作用：控制 Happ 中是否显示到期相关提示。
-- 官方文档：https://www.happ.su/main/zh/dev-docs/ying-yong-guan-li
-
-#### `subscriptions[].platform_options.happ.sub_expire_button_link`
-
-- 含义：到期按钮链接。
-- 作用：为到期提示按钮设置跳转地址。
-- 官方文档：https://www.happ.su/main/zh/dev-docs/ying-yong-guan-li
+新配置建议直接使用 `style`，不要再把 `remote_type` 作为主入口。
 
 ## 输出规则
 
-### `V2rayN`
+## `V2rayN`
 
-- 不注入 Happ 路由或注释行。
-- 只输出去重后的节点链接。
+- 只聚合 `platforms` 包含 `V2rayN` 的 source
+- 返回纯链接行列表
+- 不注入 Happ routing / 注释
+- 不生成 Clash YAML
 
-### `Happ`
+## `Happ`
 
-- 若配置了 `routing`，会先输出路由行。
-- 其余 Happ 配置会按 Happ 订阅注释规则转换后插入到节点列表前。
-- 布尔值会输出为 `1` 或 `0`。
-- 字段名会自动转换为 Happ 所需的中横线格式，例如 `profile_update_interval` 会输出为 `#profile-update-interval: 1`。
+- 只聚合 `platforms` 包含 `Happ` 的 source
+- 返回纯文本订阅
+- 节点前会插入：
+  - `routing`
+  - Happ 注释行
+
+## `Clash`
+
+- 只聚合 `platforms` 包含 `Clash` 的 source
+- 当前只接受 Clash 风格 source
+- 返回 `application/yaml` 的 Clash 配置
+
+最终输出通常包含：
+
+- `proxies`
+- `proxy-groups`
+- `rules`
+- `rule-providers`
+
+## 过滤、前缀、去重
+
+### 过滤
+
+- `include_patterns` / `exclude_patterns` 都基于节点名
+- 先判断是否命中 `include_patterns`
+- 再判断是否命中 `exclude_patterns`
+
+### 前缀
+
+- 如果设置了 `prefix`，会修改节点显示名
+- 对链接节点修改链接中的显示名
+- 对 Clash 节点修改 `name`
+
+### 去重
+
+- 链接节点按最终字符串去重
+- Clash 节点按代理关键内容去重，而不是只看名字
+
+## 常见错误排查
+
+### 1. `style "clash_proxies_yaml" requires Clash platform`
+
+原因：
+
+- 你用了 `clash_proxies_yaml`
+- 但 `platforms` 里没有 `Clash`
+
+修正：
+
+```yaml
+platforms: [Clash]
+```
+
+### 2. `decode source "...": parse clash proxies yaml ... cannot unmarshal !!str "dm1lc3M..." ...`
+
+原因：
+
+- 你把上游配置成了 `clash_proxies_yaml`
+- 但上游实际返回的是 Base64 链接订阅，不是 Clash YAML
+
+常见修正方式：
+
+1. 如果上游本来就是普通订阅，改成：
+
+```yaml
+style: link_lines_base64
+platforms: [V2rayN, Happ]
+```
+
+2. 如果上游支持通过 `User-Agent` 切换为 Clash YAML，则加：
+
+```yaml
+request_headers:
+  User-Agent: "clash-verge"
+```
+
+### 3. `requires platform_options.clash.template for Clash output`
+
+原因：
+
+- 你请求了 `platform=Clash`
+- 但没有配置 `platform_options.clash.template`
+
+修正：
+
+```yaml
+platform_options:
+  clash:
+    template: "./Self.ini"
+```
+
+### 4. `entries must not be empty for manual source`
+
+原因：
+
+- `manual source` 没有写 `entries`
+
+### 5. `remote_type "..." is not supported`
+
+原因：
+
+- 旧配置里写了当前版本不认识的 `remote_type`
+
+修正：
+
+- 优先改用 `style`
+- 如果你是传统 Base64 订阅，使用：
+
+```yaml
+style: link_lines_base64
+```
+
+## 推荐实践
+
+- 给不同来源加 `prefix`，便于在客户端里区分节点来源
+- 只在确实需要的平台上声明 `platforms`，不要把所有 source 都无脑挂到所有平台
+- 新配置统一使用 `style`，不要继续依赖 `remote_type`
+- 上游 Clash 订阅如果需要指定客户端身份，优先使用 `request_headers.User-Agent`
+- 把你自己的真实 URL、token、UUID 留在私有配置里，不要写进 `docs/config.example.yaml`

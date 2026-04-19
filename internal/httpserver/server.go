@@ -47,9 +47,9 @@ func handleSubscribe(svc *service.Service) http.HandlerFunc {
 			return
 		}
 
-		w.Header().Set("Content-Type", "text/plain; charset=utf-8")
+		w.Header().Set("Content-Type", result.ContentType)
 		w.WriteHeader(http.StatusOK)
-		_, _ = w.Write([]byte(strings.Join(result.Lines, "\n")))
+		_, _ = w.Write(result.Body)
 	}
 }
 
